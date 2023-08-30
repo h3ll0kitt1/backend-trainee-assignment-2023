@@ -23,5 +23,5 @@ func (app *application) setRouters() {
 
 	})
 
-	app.router.NotFound(errorNotFound)
+	app.router.NotFound(app.errorNotFound)
 }

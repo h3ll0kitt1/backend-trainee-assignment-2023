@@ -27,7 +27,10 @@ func (app *application) getHistory(w http.ResponseWriter, r *http.Request) {
 	var form historyDownloadForm
 	err := json.NewDecoder(r.Body).Decode(&form)
 	if err != nil {
-		errorWrongFormat(w)
+		app.logger.Errorw("error",
+			"getHistory: error parsing historyDownloadForm", err,
+		)
+		app.errorWrongFormat(w)
 		return
 	}
 
@@ -35,32 +38,41 @@ func (app *application) getHistory(w http.ResponseWriter, r *http.Request) {
 
 		ok := app.validator.UserId(user)
 		if !ok {
-			errorWrongFormat(w)
+			app.errorWrongFormat(w)
 			return
 		}
 	}
 
 	ok := app.validator.Days(form.Days)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	history, err := app.storage.GetHistory(r.Context(), form.Users, form.Days)
 	if err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"getHistory: error retrieving data from storage", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
 	filename, err := app.file.Download(history)
 	if err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"getHistory: error downloading data to file", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
 	jsonData, err := json.Marshal(filename)
 	if err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"getHistory: error converting filename to json", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
@@ -92,25 +104,31 @@ func (app *application) createSegment(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	ok := app.validator.SegmentSlug(slug)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	var form createSegmentForm
 	err := json.NewDecoder(r.Body).Decode(&form)
 	if err != nil {
-		errorWrongFormat(w)
+		app.logger.Errorw("error",
+			"createSegment: error parsing createSegmentForm", err,
+		)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	ok = app.validator.PercentageRND(form.PercentageRND)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	if err := app.storage.CreateSegment(r.Context(), slug, form.PercentageRND); err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"createSegment: error inserting data to storage", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -137,12 +155,15 @@ func (app *application) deleteSegment(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	ok := app.validator.SegmentSlug(slug)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	if err := app.storage.DeleteSegment(r.Context(), slug); err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"deleteSegment: error deleting data from storage", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
@@ -168,25 +189,31 @@ func (app *application) getSegments(w http.ResponseWriter, r *http.Request) {
 
 	user, err := strconv.ParseInt(userStr, 10, 64)
 	if err != nil {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	ok := app.validator.UserId(user)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	segments, err := app.storage.GetSegmentsByUserID(r.Context(), user)
 	if err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"getSegments: error retrieving data from storage", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
 	jsonData, err := json.Marshal(segments)
 	if err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"getSegments: error converting data to json", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
@@ -213,37 +240,43 @@ func (app *application) updateSegments(w http.ResponseWriter, r *http.Request) {
 	userStr := chi.URLParam(r, "user_id")
 	user, err := strconv.ParseInt(userStr, 10, 64)
 	if err != nil {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	ok := app.validator.UserId(user)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	var form updateSegmentsForm
 	err = json.NewDecoder(r.Body).Decode(&form)
 	if err != nil {
-		errorWrongFormat(w)
+		app.logger.Errorw("error",
+			"updateSegments: error parsing updateSegmentsForm", err,
+		)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	ok = app.validator.Segments(form.Delete)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	ok = app.validator.Segments(form.Add)
 	if !ok {
-		errorWrongFormat(w)
+		app.errorWrongFormat(w)
 		return
 	}
 
 	if err := app.storage.UpdateSegmentsByUserID(r.Context(), user, form.Delete, form.Add); err != nil {
-		errorInternalServer(w)
+		app.logger.Errorw("error",
+			"updateSegments: error updating data in storage", err,
+		)
+		app.errorInternalServer(w)
 		return
 	}
 
@@ -265,36 +298,53 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-func errorNotFound(w http.ResponseWriter, r *http.Request) {
+func (app *application) errorNotFound(w http.ResponseWriter, r *http.Request) {
 	var error errorResponse
 	error.ErrorDesc.Code = http.StatusNotFound
 	error.ErrorDesc.Message = "Wrong resource url"
 
-	jsonErr, _ := json.Marshal(error)
-
+	jsonErr, err := json.Marshal(error)
+	if err != nil {
+		app.logger.Errorw("error",
+			"errorNotFound: error converting data to json", err,
+		)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
 	w.Write(jsonErr)
 }
 
-func errorInternalServer(w http.ResponseWriter) {
+func (app *application) errorInternalServer(w http.ResponseWriter) {
 	var error errorResponse
 	error.ErrorDesc.Code = http.StatusInternalServerError
 	error.ErrorDesc.Message = "Error while processing request. Please, contact support"
 
-	jsonErr, _ := json.Marshal(error)
+	jsonErr, err := json.Marshal(error)
+	if err != nil {
+		app.logger.Errorw("error",
+			"errorNotFound: error converting data to json", err,
+		)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write(jsonErr)
 }
 
-func errorWrongFormat(w http.ResponseWriter) {
+func (app *application) errorWrongFormat(w http.ResponseWriter) {
 	var error errorResponse
 	error.ErrorDesc.Code = http.StatusBadRequest
 	error.ErrorDesc.Message = "Wrong body request format"
 
-	jsonErr, _ := json.Marshal(error)
+	jsonErr, err := json.Marshal(error)
+	if err != nil {
+		app.logger.Errorw("error",
+			"errorNotFound: error converting data to json", err,
+		)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
