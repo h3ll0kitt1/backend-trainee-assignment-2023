@@ -20,6 +20,13 @@ type application struct {
 	validator validator.Validator
 }
 
+// @title Avito Test API
+// @version 1.0
+// @description API для управления сегментами пользователей
+
+// @host localhost:8000
+// @BasePath /
+
 func main() {
 
 	cfg := config.NewConfig()

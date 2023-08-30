@@ -1,0 +1,210 @@
+basePath: /
+definitions:
+  main.Error:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  main.createSegmentForm:
+    properties:
+      percentage_random:
+        type: integer
+    type: object
+  main.errorResponse:
+    properties:
+      errorDesc:
+        $ref: '#/definitions/main.Error'
+    type: object
+  main.historyDownloadForm:
+    properties:
+      days:
+        type: integer
+      user_list:
+        items:
+          type: integer
+        type: array
+    type: object
+  main.updateSegmentsForm:
+    properties:
+      list_add:
+        items:
+          $ref: '#/definitions/models.Segment'
+        type: array
+      list_delete:
+        items:
+          $ref: '#/definitions/models.Segment'
+        type: array
+    type: object
+  models.Segment:
+    properties:
+      days_ttl:
+        type: integer
+      segment_slug:
+        type: string
+    type: object
+host: localhost:8000
+info:
+  contact: {}
+  description: API для управления сегментами пользователей
+  title: Avito Test API
+  version: "1.0"
+paths:
+  /history:
+    get:
+      consumes:
+      - application/json
+      description: Выгружает историю для переданных пользователей за переданное количество
+        дней в csv файл и возвращает имя файла
+      parameters:
+      - description: History form
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.historyDownloadForm'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+      summary: Выгрузить историю
+      tags:
+      - history
+  /segments/{slug}:
+    delete:
+      description: Удаляет сегмент
+      parameters:
+      - description: Segment Name
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+      summary: Удалить сегмент
+      tags:
+      - segments
+    post:
+      consumes:
+      - application/json
+      description: В зависимости от параметров либо просто создает сегмент, либо создает
+        сегмент и добавляет в него переданный процент случайно выбранных пользователей
+      parameters:
+      - description: Segment name
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Segment form
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.createSegmentForm'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+      summary: Создать сегмент
+      tags:
+      - segments
+  /users-segments/{user_id}:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает список сегментов, в которых состоит пользователь, если
+        таких нет, то возвращает пустой список
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+      summary: Получить сегменты пользователя
+      tags:
+      - users-segments
+    put:
+      consumes:
+      - application/json
+      description: Для пользователя удаляет сегменты из переданного списка, затем
+        добавляет из второго переданного списка сегменты с указанным в днях TTL
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      - description: Segments form
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.updateSegmentsForm'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.errorResponse'
+      summary: Обновить сегменты пользователя
+      tags:
+      - users-segments
+swagger: "2.0"

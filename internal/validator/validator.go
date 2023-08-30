@@ -34,7 +34,7 @@ func (v *DefaultValidator) UserId(user int64) bool {
 }
 
 func (v *DefaultValidator) Days(days int) bool {
-	if days >= 0 && days <= 500 {
+	if days >= 0 && days <= 5000 {
 		return true
 	}
 	return false
@@ -58,7 +58,7 @@ func (v *DefaultValidator) Segments(segments []models.Segment) bool {
 		if !re.MatchString(segment.Slug) {
 			return false
 		}
-		if segment.DaysTTL < 0 || segment.DaysTTL > 501 {
+		if segment.DaysTTL < 0 || segment.DaysTTL > 5001 {
 			return false
 		}
 	}
