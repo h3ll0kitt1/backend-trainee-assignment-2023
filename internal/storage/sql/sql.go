@@ -5,15 +5,17 @@ import (
 	"database/sql"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
 
 	"github.com/h3ll0kitt1/avitotest/internal/models"
 )
 
 type SQLStorage struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *zap.SugaredLogger
 }
 
-func NewStorage(database string) (*SQLStorage, error) {
+func NewStorage(database string, logger *zap.SugaredLogger) (*SQLStorage, error) {
 
 	db, err := sql.Open("pgx", database)
 	if err != nil {
@@ -63,7 +65,8 @@ func NewStorage(database string) (*SQLStorage, error) {
 	tx.Commit()
 
 	return &SQLStorage{
-		db: db,
+		db:     db,
+		logger: logger,
 	}, nil
 }
 
@@ -75,14 +78,14 @@ func (s *SQLStorage) CreateSegment(ctx context.Context, slug string, PercentageR
 	}
 	defer tx.Rollback()
 
-	// Добавляем сегмент в таблицу сегментов
+	// Добавляем сегмент, если его не существует
 	query := ` INSERT INTO segments (slug) VALUES ($1) ON CONFLICT (slug) DO NOTHING`
 	_, err = tx.ExecContext(ctx, query, slug)
 	if err != nil {
 		return err
 	}
 
-	// Если полученно значение желаемого процента случайных пользователей
+	// Если было передано значение желаемого процента случайных пользователей
 	if PercentageRND != 0 {
 
 		// Выбираем случайных пользователей
@@ -90,12 +93,25 @@ func (s *SQLStorage) CreateSegment(ctx context.Context, slug string, PercentageR
 		if err != nil {
 			return err
 		}
+		s.logger.Infow("info",
+			"CreateSegment: users chosen at random: ", usersRND,
+		)
 
-		// Добавляем сегмент выбранным случайным пользователям
 		for _, user := range usersRND {
 
-			query := ` 	INSERT INTO users_segments (user_id, segment_slug) VALUES ($1, $2)`
-			_, err := tx.ExecContext(ctx, query, user)
+			// Добавляем сегмент случайному пользователю
+			query := ` 	INSERT INTO users_segments (user_id, segment_slug, expires_at) 
+						VALUES ($1, $2, null) 
+						ON CONFLICT (user_id, segment_slug) DO NOTHING`
+			_, err := tx.ExecContext(ctx, query, user, slug)
+			if err != nil {
+				return err
+			}
+
+			// Добавляем запись о добавлении в историю
+			query = ` 	INSERT INTO segments_history (user_id, segment_slug, action, action_time)
+    					VALUES ($1, $2, true, now())`
+			_, err = tx.ExecContext(ctx, query, user, slug)
 			if err != nil {
 				return err
 			}
@@ -117,13 +133,15 @@ func (s *SQLStorage) DeleteSegment(ctx context.Context, slug string) error {
 	if err != nil {
 		return err
 	}
+	s.logger.Infow("info",
+		"DeleteSegment: users currently in segment: ", users,
+	)
 
 	// Для каждого пользователя из списка вносим в историю информацию об удалении
 	for _, user := range users {
 
-		query := ` 	INSERT INTO segments_history (user_id, segment_slug, action, now())
-					VALUES ($1, $2, false,  NOW())`
-
+		query := ` 	INSERT INTO segments_history (user_id, segment_slug, action, action_time)
+					VALUES ($1, $2, false,  now())`
 		_, err := tx.ExecContext(ctx, query, user, slug)
 		if err != nil {
 			return err
@@ -146,8 +164,7 @@ func (s *SQLStorage) GetSegmentsByUserID(ctx context.Context, user int64) ([]mod
 	segments := make([]models.Segment, 0)
 
 	query := `	SELECT segment_slug FROM users_segments
-    			WHERE user_id = $1 AND expires_at > NOW() or expires_at IS NULL`
-
+				WHERE user_id = $1 AND (expires_at >= NOW() OR expires_at IS NULL)`
 	rows, err := s.db.QueryContext(ctx, query, user)
 	if err != nil {
 		return nil, err
@@ -165,6 +182,10 @@ func (s *SQLStorage) GetSegmentsByUserID(ctx context.Context, user int64) ([]mod
 	if err != nil {
 		return nil, err
 	}
+
+	s.logger.Infow("info",
+		"GetSegmentsByUserID: user is currently in segments: ", segments,
+	)
 	return segments, nil
 }
 
@@ -211,12 +232,11 @@ func (s *SQLStorage) UpdateSegmentsByUserID(ctx context.Context, user int64, del
 		if err != nil {
 			return err
 		}
-
 	}
 
 	for _, segment := range addList {
 
-		//Добавляем новые сегменты в таблицу, если их не существовало до этого
+		//Добавляем новые сегменты
 		query := ` 	INSERT INTO segments (slug) VALUES ($1)
      			    ON CONFLICT (slug) DO NOTHING`
 
@@ -225,43 +245,22 @@ func (s *SQLStorage) UpdateSegmentsByUserID(ctx context.Context, user int64, del
 			return err
 		}
 
-		ok, err := s.checkUserInSegment(ctx, user, segment.Slug)
-		if err != nil {
-			return err
-		}
-
-		// Если пользователь уже в сегменте и передан TTL дней для сегмента, тогда обновляем время на текущее + TTL
-		// Добавляем запись в историю
-		if ok && segment.DaysTTL != 0 {
-
-			query = ` 	UPDATE users_segments (user_id, segment_slug, expires_at)
-    					VALUES ($1, $2, now() + interval $3 day)`
-			_, err = tx.ExecContext(ctx, query, user, segment.Slug, segment.DaysTTL)
-			if err != nil {
-				return err
-			}
-
-			query = ` 	INSERT INTO segments_history (user_id, segment_slug, action, action_time)
-    					VALUES ($1, $2, true, now())`
-			_, err = tx.ExecContext(ctx, query, user, segment.Slug)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Если пользователя в сегменте не было, то просто добавляем запись с полученным TTL или без
+		// Если указан TTL, тогда вычисляем время, когда сегмент должен перестать быть валидным и обновляем в expires_at
 		if segment.DaysTTL != 0 {
 			query = ` 	INSERT INTO users_segments (user_id, segment_slug, expires_at)
-						VALUES ($1, $2, now() + interval $3 day)`
+						VALUES ($1, $2, now() + interval '1 day' * $3)
+						ON CONFLICT (user_id, segment_slug) DO UPDATE
+						SET expires_at = EXCLUDED.expires_at`
 			_, err = tx.ExecContext(ctx, query, user, segment.Slug, segment.DaysTTL)
 			if err != nil {
 				return err
 			}
+			// Иначе считаем, что пользователя необходимо добавить в сегмент перманентно (обозначается NULL)
 		} else {
-
 			query = ` 	INSERT INTO users_segments (user_id, segment_slug, expires_at)
-						VALUES ($1, $2, NULL)`
+						VALUES ($1, $2, null)
+						ON CONFLICT (user_id, segment_slug) DO UPDATE
+						SET expires_at = EXCLUDED.expires_at`
 			_, err = tx.ExecContext(ctx, query, user, segment.Slug)
 			if err != nil {
 				return err
@@ -337,7 +336,7 @@ func (s *SQLStorage) getUsersInSegment(ctx context.Context, slug string) ([]int6
 
 	users := make([]int64, 0)
 
-	query := `SELECT user_id FROM users_segements WHERE segment_slug = $1`
+	query := `SELECT user_id FROM users_segments WHERE segment_slug = $1`
 	rows, err := s.db.QueryContext(ctx, query, slug)
 	if err != nil {
 		return nil, err

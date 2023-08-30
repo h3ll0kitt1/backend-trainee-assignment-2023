@@ -34,11 +34,12 @@ func main() {
 	cfg := config.NewConfig()
 
 	r := chi.NewRouter()
-	l := logger.NewLogger()
 	f := file.NewCSV(cfg.Filename)
 	v := validator.New()
+	l := logger.NewLogger()
+	defer l.Sync()
 
-	s, err := sql.NewStorage(cfg.Database)
+	s, err := sql.NewStorage(cfg.Database, l)
 	if err != nil {
 		log.Fatalf("Error %s open database", err)
 	}
@@ -60,5 +61,4 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Error %s launching server", err)
 	}
-
 }

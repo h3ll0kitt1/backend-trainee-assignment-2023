@@ -11,7 +11,7 @@ type Storage interface {
 	CreateSegment(ctx context.Context, slug string, PercentageRND int) error
 	DeleteSegment(ctx context.Context, slug string) error
 
-	// user
+	// users-segments
 	GetSegmentsByUserID(ctx context.Context, user int64) ([]models.Segment, error)
 	UpdateSegmentsByUserID(ctx context.Context, user int64, deleteList []models.Segment, addList []models.Segment) error
 

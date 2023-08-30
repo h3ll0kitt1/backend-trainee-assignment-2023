@@ -131,6 +131,7 @@ func (app *application) createSegment(w http.ResponseWriter, r *http.Request) {
 		app.errorInternalServer(w)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
 }
@@ -167,6 +168,7 @@ func (app *application) deleteSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
 }
@@ -280,6 +282,7 @@ func (app *application) updateSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
 }
