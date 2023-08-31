@@ -47,20 +47,19 @@ curl -X POST localhost:8080/segments/SEG_1  -H 'Content-Type: application/json' 
 
 #### Пример ответа
 
-200:
+Код ответа 200:
 
 ```json
 {}  
 ```
 
-400:
+Код ответа 400:
 
 ```json
 {"error":{"code":400,"message":"Wrong body request or url params format"}} 
 ```
 
-500:
-Error while processing request. Please, contact support
+Код ответа 500:
 
 ```json
 {"error":{"code":500,"message":"Error while processing request. Please, contact support"}} 
