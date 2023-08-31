@@ -16,6 +16,8 @@ type Validator interface {
 
 type DefaultValidator struct {
 	SegmentSlugExpr string
+	MaxHistoryDays  int
+	MaxTTLDays      int
 }
 
 func New() *DefaultValidator {
@@ -23,6 +25,8 @@ func New() *DefaultValidator {
 
 	return &DefaultValidator{
 		SegmentSlugExpr: regularExpr,
+		MaxHistoryDays:  5000,
+		MaxTTLDays:      5000,
 	}
 }
 
@@ -34,7 +38,7 @@ func (v *DefaultValidator) UserId(user int64) bool {
 }
 
 func (v *DefaultValidator) Days(days int) bool {
-	if days >= 0 && days <= 5000 {
+	if days >= 0 && days <= v.MaxHistoryDays {
 		return true
 	}
 	return false
@@ -58,7 +62,7 @@ func (v *DefaultValidator) Segments(segments []models.Segment) bool {
 		if !re.MatchString(segment.Slug) {
 			return false
 		}
-		if segment.DaysTTL < 0 || segment.DaysTTL > 5001 {
+		if segment.DaysTTL < 0 || segment.DaysTTL > v.MaxTTLDays {
 			return false
 		}
 	}
