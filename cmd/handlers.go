@@ -35,7 +35,6 @@ func (app *application) getHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, user := range form.Users {
-
 		ok := app.validator.UserId(user)
 		if !ok {
 			app.errorWrongFormat(w)
@@ -293,7 +292,7 @@ type updateSegmentsForm struct {
 }
 
 type errorResponse struct {
-	ErrorDesc Error `json:"error`
+	Error Error `json:"error"`
 }
 
 type Error struct {
@@ -303,8 +302,8 @@ type Error struct {
 
 func (app *application) errorNotFound(w http.ResponseWriter, r *http.Request) {
 	var error errorResponse
-	error.ErrorDesc.Code = http.StatusNotFound
-	error.ErrorDesc.Message = "Wrong resource url"
+	error.Error.Code = http.StatusNotFound
+	error.Error.Message = "Wrong resource url"
 
 	jsonErr, err := json.Marshal(error)
 	if err != nil {
@@ -320,8 +319,8 @@ func (app *application) errorNotFound(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) errorInternalServer(w http.ResponseWriter) {
 	var error errorResponse
-	error.ErrorDesc.Code = http.StatusInternalServerError
-	error.ErrorDesc.Message = "Error while processing request. Please, contact support"
+	error.Error.Code = http.StatusInternalServerError
+	error.Error.Message = "Error while processing request. Please, contact support"
 
 	jsonErr, err := json.Marshal(error)
 	if err != nil {
@@ -338,8 +337,8 @@ func (app *application) errorInternalServer(w http.ResponseWriter) {
 
 func (app *application) errorWrongFormat(w http.ResponseWriter) {
 	var error errorResponse
-	error.ErrorDesc.Code = http.StatusBadRequest
-	error.ErrorDesc.Message = "Wrong body request format"
+	error.Error.Code = http.StatusBadRequest
+	error.Error.Message = "Wrong body request or url params format"
 
 	jsonErr, err := json.Marshal(error)
 	if err != nil {

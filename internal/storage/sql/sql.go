@@ -3,10 +3,12 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
+	"github.com/h3ll0kitt1/avitotest/internal/config"
 	"github.com/h3ll0kitt1/avitotest/internal/models"
 )
 
@@ -15,9 +17,12 @@ type SQLStorage struct {
 	logger *zap.SugaredLogger
 }
 
-func NewStorage(database string, logger *zap.SugaredLogger) (*SQLStorage, error) {
+func NewStorage(cfg config.Database, logger *zap.SugaredLogger) (*SQLStorage, error) {
 
-	db, err := sql.Open("pgx", database)
+	DSN := fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.DATABASE_HOST, cfg.POSTGRES_USER, cfg.POSTGRES_PASSWORD, cfg.POSTGRES_DB)
+
+	db, err := sql.Open("pgx", DSN)
 	if err != nil {
 		return nil, err
 	}
@@ -304,6 +309,80 @@ func (s *SQLStorage) GetHistory(ctx context.Context, users []int64, days int) ([
 
 	}
 	return usersHistory, nil
+}
+
+type expiredSegment struct {
+	user int64
+	slug string
+}
+
+func (s *SQLStorage) DeleteExpiredSegments() {
+	tx, err := s.db.Begin()
+	if err != nil {
+		s.logger.Errorw("error",
+			"DeleteExpiredSegments: transaction failed: ", err,
+		)
+		return
+	}
+	defer tx.Rollback()
+
+	// Найдем все не валидные более для пользователей сегменты
+	expiredSegments := make([]expiredSegment, 0)
+
+	query := `	SELECT user_id, segment_slug FROM users_segments
+				WHERE  expires_at < now()`
+	rows, err := s.db.QueryContext(context.Background(), query)
+	if err != nil {
+		s.logger.Errorw("error",
+			"DeleteExpiredSegments: selection from users_segments failed ", err,
+		)
+		return
+	}
+
+	for rows.Next() {
+		var segment expiredSegment
+		err = rows.Scan(&segment.user, &segment.slug)
+		if err != nil {
+			s.logger.Errorw("error",
+				"DeleteExpiredSegments: enumerating users_segments failed ", err,
+			)
+			return
+		}
+		expiredSegments = append(expiredSegments, segment)
+	}
+	err = rows.Err()
+	if err != nil {
+		s.logger.Errorw("error",
+			"DeleteExpiredSegments: enumerating users_segments err failed ", err,
+		)
+		return
+	}
+
+	// Пишем об удалении сегмента в историю и удаляем
+	for _, segment := range expiredSegments {
+		query = ` 	INSERT INTO segments_history (user_id, segment_slug, action, action_time)
+    				VALUES ($1, $2, false, now())`
+		_, err = tx.ExecContext(context.Background(), query, segment.user, segment.slug)
+		if err != nil {
+			s.logger.Errorw("error",
+				"DeleteExpiredSegments: inserting into segments_history failed ", err,
+			)
+			return
+		}
+
+		query = ` 	DELETE FROM users_segments
+   					WHERE user_id = $1 AND segment_slug = $2`
+		_, err = tx.ExecContext(context.Background(), query, segment.user, segment.slug)
+		if err != nil {
+			s.logger.Errorw("error",
+				"DeleteExpiredSegments: deleting from segments_history failed ", err,
+			)
+		}
+	}
+	s.logger.Infow("info",
+		"DeleteExpiredSegments: successfully deleted segments: ", expiredSegments,
+	)
+	tx.Commit()
 }
 
 func (s *SQLStorage) getRandomUsers(ctx context.Context, percentage int) ([]int64, error) {

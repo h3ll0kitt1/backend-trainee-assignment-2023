@@ -17,4 +17,6 @@ type Storage interface {
 
 	// history
 	GetHistory(ctx context.Context, users []int64, days int) ([]models.History, error)
+
+	DeleteExpiredSegments()
 }

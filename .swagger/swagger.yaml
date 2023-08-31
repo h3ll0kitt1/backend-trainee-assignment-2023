@@ -14,7 +14,7 @@ definitions:
     type: object
   main.errorResponse:
     properties:
-      errorDesc:
+      error:
         $ref: '#/definitions/main.Error'
     type: object
   main.historyDownloadForm:
