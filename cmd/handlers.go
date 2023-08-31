@@ -13,7 +13,7 @@ import (
 // GetHistory godoc
 //
 //	@summary        Выгрузить историю
-//	@description    Выгружает историю для переданных пользователей за переданное количество дней в csv файл и возвращает имя файла
+//	@description    Принимает список пользователей и период (в днях) за который надо выгрузить историю добавлений и удалений пользователей в сегменты и возвращает файл с  полученной историей
 //	@tags           history
 //	@accept         json
 //	@produce        json
@@ -65,8 +65,13 @@ func (app *application) getHistory(w http.ResponseWriter, r *http.Request) {
 		app.errorInternalServer(w)
 		return
 	}
+	response := struct {
+		Filename string `json:"filename"`
+	}{
+		Filename: filename,
+	}
 
-	jsonData, err := json.Marshal(filename)
+	jsonData, err := json.Marshal(response)
 	if err != nil {
 		app.logger.Errorw("error",
 			"getHistory: error converting filename to json", err,

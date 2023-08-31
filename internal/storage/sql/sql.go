@@ -290,9 +290,9 @@ func (s *SQLStorage) GetHistory(ctx context.Context, users []int64, days int) ([
 	for _, user := range users {
 		query := `	SELECT segment_slug, user_id, action, action_time 
 					FROM segments_history
-					WHERE user_id = $1;`
+					WHERE user_id = $1 AND action_time >= NOW() - interval '1 day' * $2;`
 
-		rows, err := s.db.QueryContext(ctx, query, user)
+		rows, err := s.db.QueryContext(ctx, query, user, days)
 
 		for rows.Next() {
 			var history models.History

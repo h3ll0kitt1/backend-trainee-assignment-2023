@@ -38,7 +38,7 @@ func (v *DefaultValidator) UserId(user int64) bool {
 }
 
 func (v *DefaultValidator) Days(days int) bool {
-	if days >= 0 && days <= v.MaxHistoryDays {
+	if days >= 1 && days <= v.MaxHistoryDays {
 		return true
 	}
 	return false

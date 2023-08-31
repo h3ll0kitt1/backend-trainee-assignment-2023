@@ -1,9 +1,9 @@
-DROP TABLE users_segments;
+DROP TABLE IF EXISTS users_segments;
 
-DROP TABLE segments_history;
+DROP TABLE IF EXISTS segments_history;
 
-DROP TABLE segments;
+DROP TABLE IF EXISTS segments;
 
-DROP TABLE users;
+DROP TABLE IF EXISTS users;
 
 
